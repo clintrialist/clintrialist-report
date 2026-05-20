@@ -209,12 +209,30 @@ def build_page(
         "",
         "<!-- BRAND -->",
         '<div style="text-align: center; padding: 6px 0 10px 0;">',
+        '<div style="display: flex; justify-content: center; align-items: center; '
+        'gap: 14px; flex-wrap: wrap;">',
+        # Logo: bell curve (AI/ML purple) over a forest-plot CI bar (Causal teal)
+        # with point estimate (Adaptive orange) just right of a dashed null line.
+        '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" '
+        'viewBox="0 0 48 48" role="img" '
+        'aria-label="ClinTrialist Report logo: bell curve over a forest plot">'
+        '<line x1="24" y1="4" x2="24" y2="46" stroke="#cccccc" '
+        'stroke-width="0.6" stroke-dasharray="2,2"/>'
+        '<path d="M 4 30 C 14 30, 18 10, 24 10 C 30 10, 34 30, 44 30" '
+        'fill="none" stroke="#6a1b9a" stroke-width="2.4" stroke-linecap="round"/>'
+        '<line x1="10" y1="40" x2="38" y2="40" stroke="#00695c" '
+        'stroke-width="2.4" stroke-linecap="round"/>'
+        '<line x1="10" y1="36.5" x2="10" y2="43.5" stroke="#00695c" stroke-width="2"/>'
+        '<line x1="38" y1="36.5" x2="38" y2="43.5" stroke="#00695c" stroke-width="2"/>'
+        '<circle cx="26" cy="40" r="3.2" fill="#e65100"/>'
+        '</svg>',
         '<h1 style="'
         "font-family: 'Times New Roman', Times, serif; "
         "font-size: 4.2em; font-weight: bold; font-style: italic; "
         "margin: 0; letter-spacing: 1px; "
         "text-shadow: 3px 3px 4px #aaaaaa; color: #000000;"
         '">ClinTrialist Report</h1>',
+        "</div>",
         '<font size="2" color="#333333"><i>FDA news + clinical/pharma stats journals</i></font>',
         f'<br><font size="2" color="#555555">{now}</font>',
         "</div>",

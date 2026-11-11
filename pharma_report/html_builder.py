@@ -1,11 +1,42 @@
 """HTML generation: 3-column top section (FDA + 2 stats cols) and collapsible therapeutic panels."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from pharma_report.feeds import REGULATORY_AGENCY_HOMES
 from pharma_report.topics import TOPIC_ORDER, TOPICS
 
 DEFAULT_LINK_COLOR = "#0000cc"
+
+# Phone-width rules (<= 640px): one column everywhere, splash story below the brand.
+_PHONE_CSS = (
+    "<style>@media (max-width: 640px) {"
+    " .top { display: flex; flex-direction: column; }"
+    " .brand { order: 1; } .hdr { order: 2; }"
+    " .hdr, .hdr tbody, .hdr tr, .hdr td, table.pcols, table.pcols tbody, table.pcols tr,"
+    " table.pcols td { display: block !important; width: 100% !important;"
+    " box-sizing: border-box; }"
+    " table.pcols td { border-right: none !important; }"
+    " .cols { column-count: 1 !important; column-rule: none !important; }"
+    " .wordmark { font-size: 2.2em !important; }"
+    "}</style>"
+)
+
+
+def _network_snippet(built: str) -> str:
+    """RANGE network chrome, absolute URLs (this site lives on a separate GitHub account)."""
+    return (
+        '<link rel="stylesheet" href="https://gcicc.github.io/suite/network.css">\n'
+        '<script src="https://gcicc.github.io/suite/network.js" data-section="clintrialist" '
+        f'data-built="{built}" data-next="daily 17:00 UTC" defer></script>'
+    )
+
+
+def _count(items: list) -> int:
+    return len(items)
+
+
+def _journal_count(journals: list[dict]) -> int:
+    return sum(len(j.get("entries") or []) for j in journals)
 
 
 def _time_ago(published: datetime) -> str:
@@ -91,16 +122,24 @@ def _journal_block(journal: dict) -> str:
     return "\n".join(parts)
 
 
-def _pick_lead(regulatory: dict[str, list[dict]]) -> dict | None:
-    """Newest FDA item; falls back to newest regulatory item across all agencies."""
-    fda_items = regulatory.get("FDA") or []
-    if fda_items:
+LEAD_MAX_AGE = timedelta(hours=72)
+
+
+def _pick_lead(
+    regulatory: dict[str, list[dict]], now: datetime | None = None
+) -> dict | None:
+    """Splash story: newest FDA item no older than 72h, else newest regulatory item
+    no older than 72h, else (nothing is fresh) the freshest item available."""
+    now = now or datetime.now(timezone.utc)
+    cutoff = now - LEAD_MAX_AGE
+    newest_first = lambda items: sorted(items, key=lambda e: e["published"], reverse=True)  # noqa: E731
+    fda_items = newest_first(regulatory.get("FDA") or [])
+    all_items = newest_first([e for items in regulatory.values() for e in items])
+    if fda_items and fda_items[0]["published"] >= cutoff:
         return fda_items[0]
-    all_items = [e for items in regulatory.values() for e in items]
-    if not all_items:
-        return None
-    all_items.sort(key=lambda e: e["published"], reverse=True)
-    return all_items[0]
+    if all_items and all_items[0]["published"] >= cutoff:
+        return all_items[0]
+    return all_items[0] if all_items else None
 
 
 def _pick_teaser(journals: list[dict]) -> dict | None:
@@ -190,12 +229,15 @@ def build_page(
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
         "<title>ClinTrialist Report</title>",
         '<base target="_blank" rel="noopener noreferrer">',
+        _PHONE_CSS,
+        _network_snippet(datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")),
         "</head>",
         '<body style="font-family: \'Times New Roman\', Times, serif; '
         "margin: 0; padding: 0; background-color: #ffffff;\">",
         "",
         "<!-- HEADER: top-left teaser + centered lead story above the brand -->",
-        '<table width="100%" cellpadding="6" cellspacing="0" border="0">',
+        '<div class="top">',
+        '<table class="hdr" width="100%" cellpadding="6" cellspacing="0" border="0">',
         '<tr valign="top">',
         '<td width="25%" align="left">',
         _teaser_block(teaser),
@@ -208,7 +250,7 @@ def build_page(
         "</table>",
         "",
         "<!-- BRAND -->",
-        '<div style="text-align: center; padding: 6px 0 10px 0;">',
+        '<div class="brand" style="text-align: center; padding: 6px 0 10px 0;">',
         '<div style="display: flex; justify-content: center; align-items: center; '
         'gap: 14px; flex-wrap: wrap;">',
         # Logo: bell curve (AI/ML purple) over a forest-plot CI bar (Causal teal)
@@ -226,21 +268,21 @@ def build_page(
         '<line x1="38" y1="36.5" x2="38" y2="43.5" stroke="#00695c" stroke-width="2"/>'
         '<circle cx="26" cy="40" r="3.2" fill="#e65100"/>'
         '</svg>',
-        '<h1 style="'
+        '<h1 class="wordmark" style="'
         "font-family: 'Times New Roman', Times, serif; "
-        "font-size: 4.2em; font-weight: bold; font-style: italic; "
-        "margin: 0; letter-spacing: 1px; "
-        "text-shadow: 3px 3px 4px #aaaaaa; color: #000000;"
+        "font-size: 3em; font-weight: bold; "
+        "margin: 0; letter-spacing: 1px; color: #000000;"
         '">ClinTrialist Report</h1>',
         "</div>",
         '<font size="2" color="#333333"><i>FDA news + clinical/pharma stats journals</i></font>',
         f'<br><font size="2" color="#555555">{now}</font>',
         "</div>",
+        "</div>",  # close .top
         _legend(),
         "<hr>",
         "",
         "<!-- TOP SECTION: Stats journals then Industry, flowing across 3 balanced CSS columns -->",
-        '<div style="column-count: 3; column-gap: 20px; '
+        '<div class="cols" style="column-count: 3; column-gap: 20px; '
         'column-rule: 1px solid #cccccc; padding: 8px 16px; font-size: 14px;">',
         "",
         '<!-- Stats banner leads, journals flow across columns -->',
@@ -290,9 +332,10 @@ def build_page(
             '<details open style="margin: 8px;">',
             '<summary style="cursor: pointer; padding: 10px; background-color: #ffe5e5; '
             'font-size: 1.3em;"><b>REGULATORY WATCH</b> '
+            f'<font size="2" color="#555555">({sum(_count(regulatory.get(a) or []) for a in _AGENCY_ORDER)})</font> '
             '<font size="2" color="#555555">&mdash; guidance, approvals, workshops</font>'
             '</summary>',
-            '<table width="100%" cellpadding="10" cellspacing="0" border="0">',
+            '<table class="pcols" width="100%" cellpadding="10" cellspacing="0" border="0">',
             '<tr valign="top">',
         ])
         for i, agency in enumerate(_AGENCY_ORDER):
@@ -323,8 +366,9 @@ def build_page(
             "",
             '<details style="margin: 8px;">',
             '<summary style="cursor: pointer; padding: 10px; background-color: #eee5ff; '
-            'font-size: 1.3em;"><b>GENERAL MEDICAL</b></summary>',
-            '<table width="100%" cellpadding="10" cellspacing="0" border="0">',
+            'font-size: 1.3em;"><b>GENERAL MEDICAL</b> '
+            f'<font size="2" color="#555555">({_journal_count(general_journals)})</font></summary>',
+            '<table class="pcols" width="100%" cellpadding="10" cellspacing="0" border="0">',
             '<tr valign="top">',
         ])
         for i, col in enumerate(gen_split):
@@ -354,11 +398,12 @@ def build_page(
         lines.extend([
             "",
             '<details style="margin: 8px;">',
-            f'<summary style="cursor: pointer; padding: 10px; background-color: #f0f0f0; '
+            '<summary style="cursor: pointer; padding: 10px; background-color: #f0f0f0; '
             'font-size: 1.3em;"><b>'
             + therapeutic_labels[cat]
-            + "</b></summary>",
-            '<table width="100%" cellpadding="10" cellspacing="0" border="0">',
+            + f'</b> <font size="2" color="#555555">({_journal_count(cat_journals)})</font>'
+            "</summary>",
+            '<table class="pcols" width="100%" cellpadding="10" cellspacing="0" border="0">',
             '<tr valign="top">',
         ])
         widths = ["33%", "33%", "34%"]

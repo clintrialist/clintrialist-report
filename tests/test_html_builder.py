@@ -103,3 +103,40 @@ def test_empty_journal_renders_placeholder():
     js = [dict(j, entries=[]) for j in JOURNALS]
     html = build_page({"FDA": [], "EMA": [], "Health Canada": [], "PMDA": []}, [], js)
     assert "No recent articles" in html
+
+
+def _aged(title: str, hours: float, source: str = "FDA") -> dict:
+    e = _make_entry(title, source=source)
+    e["published"] = datetime.now(timezone.utc) - timedelta(hours=hours)
+    return e
+
+
+def test_lead_prefers_fresh_fda_within_72h():
+    from pharma_report.html_builder import _pick_lead
+
+    reg = {"FDA": [_aged("old fda", 24 * 37), _aged("fresh fda", 10)], "EMA": [_aged("ema", 1, "EMA")]}
+    assert _pick_lead(reg)["title"] == "fresh fda"
+
+
+def test_lead_skips_stale_fda_for_fresh_other_agency():
+    from pharma_report.html_builder import _pick_lead
+
+    reg = {"FDA": [_aged("old fda", 24 * 37)], "EMA": [_aged("fresh ema", 5, "EMA")]}
+    assert _pick_lead(reg)["title"] == "fresh ema"
+
+
+def test_lead_falls_back_to_freshest_when_all_stale():
+    from pharma_report.html_builder import _pick_lead
+
+    reg = {"FDA": [_aged("a", 24 * 37)], "EMA": [_aged("b", 24 * 10, "EMA")]}
+    assert _pick_lead(reg)["title"] == "b"
+    assert _pick_lead({"FDA": []}) is None
+
+
+def test_network_chrome_phone_css_counts_and_no_shadow():
+    html = build_page(_regulatory(), _industry(), _seeded_journals())
+    assert 'data-section="clintrialist"' in html
+    assert "https://gcicc.github.io/suite/network.js" in html
+    assert "@media (max-width: 640px)" in html and "column-count: 1" in html
+    assert "text-shadow: 3px" not in html
+    assert "REGULATORY WATCH</b> <font" in html

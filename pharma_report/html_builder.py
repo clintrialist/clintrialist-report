@@ -23,7 +23,7 @@ _PHONE_CSS = (
 
 
 def _network_snippet(built: str) -> str:
-    """Telemetrics network chrome, absolute URLs (this site lives on a separate GitHub account)."""
+    """TELEMETRx network chrome, absolute URLs (this site lives on a separate GitHub account)."""
     return (
         '<link rel="stylesheet" href="https://gcicc.github.io/suite/network.css">\n'
         '<script src="https://gcicc.github.io/suite/network.js" data-section="clintrialist" '
